@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Soccer Ball Tracker - Storage Stack (S3 + DynamoDB)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: Deployment environment
+
+Resources:
+
+  # -------------------------------------------------------
+  # S3 Bucket — stores uploaded videos and processed frames
+  # -------------------------------------------------------
+  VideosBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'sbt-videos-${Environment}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  # Bucket policy — enforce HTTPS only
+  VideosBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref VideosBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyHTTP
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt VideosBucket.Arn
+              - !Sub '${VideosBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
+  # -------------------------------------------------------
+  # DynamoDB Table — stores tracking results per frame
+  # -------------------------------------------------------
+  TrackingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'sbt-tracking-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: videoId
+          AttributeType: S
+        - AttributeName: frameId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: videoId
+          KeyType: HASH
+        - AttributeName: frameId
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+Outputs:
+  VideosBucketName:
+    Description: Name of the S3 videos bucket
+    Value: !Ref VideosBucket
+    Export:
+      Name: !Sub 'sbt-videos-bucket-${Environment}'
+
+  VideosBucketArn:
+    Description: ARN of the S3 videos bucket
+    Value: !GetAtt VideosBucket.Arn
+    Export:
+      Name: !Sub 'sbt-videos-bucket-arn-${Environment}'
+
+  TrackingTableName:
+    Description: Name of the DynamoDB tracking table
+    Value: !Ref TrackingTable
+    Export:
+      Name: !Sub 'sbt-tracking-table-${Environment}'
+
+  TrackingTableArn:
+    Description: ARN of the DynamoDB tracking table
+    Value: !GetAtt TrackingTable.Arn
+    Export:
+      Name: !Sub 'sbt-tracking-table-arn-${Environment}'
