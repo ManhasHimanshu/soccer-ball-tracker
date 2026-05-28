@@ -33,4 +33,6 @@ Thumbs.db
 .idea/
 
 # Build artifacts
+tmp/output.txt
+results_output.txt
 tmp/
