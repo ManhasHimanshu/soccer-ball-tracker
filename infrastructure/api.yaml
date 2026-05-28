@@ -1,0 +1,225 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: API Gateway + Lambda for Soccer Ball Tracker
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+
+Resources:
+
+  # ─── IAM Role ────────────────────────────────────────────────────────────────
+
+  ApiLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub sbt-api-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ApiLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub arn:aws:s3:::sbt-videos-dev-533003975029/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource: !Sub arn:aws:dynamodb:us-east-1:533003975029:table/sbt-tracking-${Environment}
+
+  # ─── Lambda Functions ─────────────────────────────────────────────────────────
+
+  GetUploadUrlFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub sbt-get-upload-url-${Environment}
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt ApiLambdaRole.Arn
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          VIDEO_BUCKET: sbt-videos-dev-533003975029
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'placeholder'}
+
+  GetStatusFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub sbt-get-status-${Environment}
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt ApiLambdaRole.Arn
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          TRACKING_TABLE: !Sub sbt-tracking-${Environment}
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'placeholder'}
+
+  GetResultsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub sbt-get-results-${Environment}
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt ApiLambdaRole.Arn
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          TRACKING_TABLE: !Sub sbt-tracking-${Environment}
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'placeholder'}
+
+  # ─── API Gateway ──────────────────────────────────────────────────────────────
+
+  SbtApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub sbt-api-${Environment}
+      Description: Soccer Ball Tracker API
+
+  # /upload-url
+  UploadUrlResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SbtApi
+      ParentId: !GetAtt SbtApi.RootResourceId
+      PathPart: upload-url
+
+  UploadUrlMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SbtApi
+      ResourceId: !Ref UploadUrlResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${GetUploadUrlFunction.Arn}/invocations
+
+  # /status/{videoId}
+  StatusResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SbtApi
+      ParentId: !GetAtt SbtApi.RootResourceId
+      PathPart: status
+
+  StatusVideoIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SbtApi
+      ParentId: !Ref StatusResource
+      PathPart: '{videoId}'
+
+  StatusMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SbtApi
+      ResourceId: !Ref StatusVideoIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${GetStatusFunction.Arn}/invocations
+
+  # /results/{videoId}
+  ResultsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SbtApi
+      ParentId: !GetAtt SbtApi.RootResourceId
+      PathPart: results
+
+  ResultsVideoIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SbtApi
+      ParentId: !Ref ResultsResource
+      PathPart: '{videoId}'
+
+  ResultsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SbtApi
+      ResourceId: !Ref ResultsVideoIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${GetResultsFunction.Arn}/invocations
+
+  # ─── Lambda Permissions ───────────────────────────────────────────────────────
+
+  UploadUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetUploadUrlFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:us-east-1:${AWS::AccountId}:${SbtApi}/*/GET/upload-url
+
+  StatusPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetStatusFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:us-east-1:${AWS::AccountId}:${SbtApi}/*/GET/status/*
+
+  ResultsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetResultsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:us-east-1:${AWS::AccountId}:${SbtApi}/*/GET/results/*
+
+  # ─── Deployment ───────────────────────────────────────────────────────────────
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - UploadUrlMethod
+      - StatusMethod
+      - ResultsMethod
+    Properties:
+      RestApiId: !Ref SbtApi
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref SbtApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref Environment
+
+Outputs:
+  ApiUrl:
+    Value: !Sub https://${SbtApi}.execute-api.us-east-1.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub sbt-api-url-${Environment}

@@ -1,72 +1,55 @@
+import boto3
 import os
 import json
-import boto3
-import base64
-import logging
-from PIL import Image
-from io import BytesIO
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from datetime import datetime, timezone
 
 s3 = boto3.client('s3')
-sagemaker = boto3.client('sagemaker-runtime')
+dynamodb = boto3.resource('dynamodb')
+sagemaker_runtime = boto3.client('sagemaker-runtime')
 
-# SageMaker endpoint name - we'll create this endpoint in a later step
-SAGEMAKER_ENDPOINT = os.environ.get('SAGEMAKER_ENDPOINT', 'sbt-yolov8-endpoint')
+TABLE_NAME    = os.environ['TRACKING_TABLE']
+ENDPOINT_NAME = os.environ['SAGEMAKER_ENDPOINT']
 
+def set_status(table, video_id, state, error=None):
+    item = {
+        'videoId': video_id,
+        'frameId': 'STATUS',
+        'state': state,
+        'updatedAt': datetime.now(timezone.utc).isoformat()
+    }
+    if error:
+        item['error'] = error
+    table.put_item(Item=item)
 
 def lambda_handler(event, context):
-    """
-    Triggered by Step Functions. Receives a list of frame S3 keys,
-    sends each frame to YOLOv8 on SageMaker, and returns all detections.
-    """
-    logger.info(f"Received event: {json.dumps(event)}")
-
-    # Get frame details from the previous step's output
-    video_id = event['videoId']
-    bucket = event['bucket']
+    video_id   = event['videoId']
+    bucket     = event['bucket']
     frame_keys = event['frameKeys']
 
-    logger.info(f"Running inference on {len(frame_keys)} frames")
+    table = dynamodb.Table(TABLE_NAME)
+    set_status(table, video_id, 'RUNNING_INFERENCE')
 
-    all_detections = []
+    detections = []
+    for key in frame_keys:
+        # Download frame
+        response = s3.get_object(Bucket=bucket, Key=key)
+        frame_bytes = response['Body'].read()
 
-    for i, frame_key in enumerate(frame_keys):
-        logger.info(f"Processing frame {i + 1}/{len(frame_keys)}: {frame_key}")
-
-        # Download frame from S3
-        response = s3.get_object(Bucket=bucket, Key=frame_key)
-        image_bytes = response['Body'].read()
-
-        # Convert image to base64 so it can be sent as JSON
-        image_b64 = base64.b64encode(image_bytes).decode('utf-8')
-
-        # Send frame to SageMaker endpoint for inference
-        sagemaker_response = sagemaker.invoke_endpoint(
-            EndpointName=SAGEMAKER_ENDPOINT,
-            ContentType='application/json',
-            Body=json.dumps({'image': image_b64})
+        # Send to SageMaker
+        sm_response = sagemaker_runtime.invoke_endpoint(
+            EndpointName=ENDPOINT_NAME,
+            ContentType='application/octet-stream',
+            Body=frame_bytes
         )
+        result = json.loads(sm_response['Body'].read())
 
-        # Parse the response from YOLOv8
-        result = json.loads(sagemaker_response['Body'].read().decode('utf-8'))
+        detections.append({
+            'frameKey': key,
+            'detections': result
+        })
 
-        # Store this frame's detections
-        frame_detection = {
-            'frameKey': frame_key,
-            'frameIndex': i,
-            'detections': result['detections']
-        }
-        all_detections.append(frame_detection)
-
-    logger.info(f"Completed inference on all {len(frame_keys)} frames")
-
-    # Pass everything to the next step
     return {
         'videoId': video_id,
         'bucket': bucket,
-        'frameCount': len(frame_keys),
-        'detections': all_detections
+        'detections': detections
     }
