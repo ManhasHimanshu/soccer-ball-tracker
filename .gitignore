@@ -36,3 +36,6 @@ Thumbs.db
 tmp/output.txt
 results_output.txt
 tmp/
+
+*.zip
+response.json

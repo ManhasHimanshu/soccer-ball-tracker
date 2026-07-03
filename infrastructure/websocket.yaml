@@ -2,6 +2,74 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: SBT real-time layer - API Gateway WebSocket API + connection tracking
 
 Resources:
+  WsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: sbt-ws-lambda-role-dev
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ws-connections-table-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt ConnectionsTable.Arn
+
+  WsConnectFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: sbt-ws-connect-dev
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt WsLambdaRole.Arn
+      Timeout: 10
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"status": "placeholder"}
+
+  WsDisconnectFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: sbt-ws-disconnect-dev
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt WsLambdaRole.Arn
+      Timeout: 10
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"status": "placeholder"}
+
+  WsDefaultFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: sbt-ws-default-dev
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt WsLambdaRole.Arn
+      Timeout: 10
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"status": "placeholder"}
   ConnectionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
