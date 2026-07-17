@@ -2,6 +2,8 @@ import { fetchAuthSession } from 'aws-amplify/auth'
 import axios from 'axios'
 import { API_URL } from './amplify'
 
+export const WS_URL = import.meta.env.VITE_WS_URL
+
 // Creates an axios instance with the Cognito JWT token automatically attached
 const getAuthenticatedClient = async () => {
   const session = await fetchAuthSession()

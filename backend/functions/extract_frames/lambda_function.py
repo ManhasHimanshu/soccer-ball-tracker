@@ -45,7 +45,7 @@ def set_status(table, video_id, state, error=None):
 def lambda_handler(event, context):
     video_id = event['videoId']
     bucket   = event['bucket']
-    key      = event['key']
+    key      = event['videoKey']
 
     table = dynamodb.Table(TABLE_NAME)
 

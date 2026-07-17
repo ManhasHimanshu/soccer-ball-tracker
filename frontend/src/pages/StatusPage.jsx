@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getVideoStatus } from '../config/api'
+import { getVideoStatus, WS_URL } from '../config/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 const STATE_MESSAGES = {
@@ -31,35 +31,59 @@ function StatusPage() {
   const navigate = useNavigate()
   const [status, setStatus] = useState(null)
   const [error, setError] = useState(null)
-  const intervalRef = useRef(null)
+  const wsRef = useRef(null)
 
   useEffect(() => {
-    const poll = async () => {
-      try {
-        const data = await getVideoStatus(videoId)
-        setStatus(data)
+  let cancelled = false
 
-        if (data.state === 'COMPLETE') {
-          clearInterval(intervalRef.current)
-          setTimeout(() => navigate(`/results/${videoId}`), 1500)
-        }
-
-        if (data.state === 'FAILED') {
-          clearInterval(intervalRef.current)
-        }
-      } catch (err) {
-        // 404 means pipeline hasn't started yet, keep polling
-        if (err.response?.status !== 404) {
-          setError('Failed to fetch status. Please refresh.')
-          clearInterval(intervalRef.current)
-        }
+  // One initial fetch: pushes only cover transitions AFTER we connect,
+  // so a page opened mid-pipeline needs current state once.
+  const fetchInitial = async () => {
+    try {
+      const data = await getVideoStatus(videoId)
+      if (!cancelled) setStatus(data)
+    } catch (err) {
+      // 404 = pipeline hasn't written STATUS yet; the socket will tell us when it does
+      if (err.response?.status !== 404 && !cancelled) {
+        setError('Failed to fetch status. Please refresh.')
       }
     }
+  }
 
-    poll()
-    intervalRef.current = setInterval(poll, 3000)
-    return () => clearInterval(intervalRef.current)
-  }, [videoId])
+  const ws = new WebSocket(WS_URL)
+  wsRef.current = ws
+
+  ws.onopen = () => {
+    // Fetch AFTER the socket is open: no gap where an update could slip past us
+    fetchInitial()
+  }
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data)
+    if (msg.videoId !== videoId) return  // broadcast carries all videos; keep ours
+    setStatus({
+      state: msg.state,
+      error: msg.error,
+      updatedAt: new Date().toISOString()
+    })
+  }
+
+  ws.onerror = () => {
+    if (!cancelled) setError('Live connection failed. Please refresh.')
+  }
+
+  return () => {
+    cancelled = true
+    ws.close()
+  }
+}, [videoId])
+
+useEffect(() => {
+  if (status?.state === 'COMPLETE') {
+    const t = setTimeout(() => navigate(`/results/${videoId}`), 1500)
+    return () => clearTimeout(t)
+  }
+}, [status, videoId, navigate])
 
   const currentStep = status ? (STATE_MESSAGES[status.state]?.step || 0) : 0
 
