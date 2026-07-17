@@ -157,5 +157,11 @@ Resources:
 Outputs:
   ConnectionsTableName:
     Value: !Ref ConnectionsTable
+    Export:
+      Name: sbt-ws-connections-table-dev
   WebSocketUrl:
     Value: !Sub wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/dev
+  WebSocketCallbackUrl:
+    Value: !Sub https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/dev
+    Export:
+      Name: sbt-ws-callback-url-dev

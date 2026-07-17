@@ -12,6 +12,11 @@ Parameters:
     Default: sbt-yolov8-endpoint
     Description: Name of the SageMaker endpoint for YOLOv8 inference
 
+  WsConnectionsTable:
+    Type: String
+    Default: sbt-ws-connections-dev
+    Description: Name of the WebSocket connections table (from the websocket stack)
+
 Resources:
 
   # ─────────────────────────────────────────
@@ -60,6 +65,20 @@ Resources:
                 Action:
                   - sagemaker:InvokeEndpoint
                 Resource: '*'
+        - PolicyName: ws-broadcast
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Allow pipeline Lambdas to push messages to WebSocket connections
+              - Effect: Allow
+                Action:
+                  - execute-api:ManageConnections
+                Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*/POST/@connections/*'
+              # Allow pipeline Lambdas to read the connections table (who is listening)
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${WsConnectionsTable}'
 
   # ─────────────────────────────────────────
   # IAM Role for Step Functions
@@ -101,6 +120,11 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
       MemorySize: 1024
+      Environment:
+        Variables:
+          TRACKING_TABLE: !Sub 'sbt-tracking-${Environment}'
+          WS_CONNECTIONS_TABLE: !Ref WsConnectionsTable
+          WS_CALLBACK_URL: !ImportValue sbt-ws-callback-url-dev
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -118,6 +142,9 @@ Resources:
       Environment:
         Variables:
           SAGEMAKER_ENDPOINT: !Ref SageMakerEndpoint
+          TRACKING_TABLE: !Sub 'sbt-tracking-${Environment}'
+          WS_CONNECTIONS_TABLE: !Ref WsConnectionsTable
+          WS_CALLBACK_URL: !ImportValue sbt-ws-callback-url-dev
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -135,6 +162,8 @@ Resources:
       Environment:
         Variables:
           TRACKING_TABLE: !Sub 'sbt-tracking-${Environment}'
+          WS_CONNECTIONS_TABLE: !Ref WsConnectionsTable
+          WS_CALLBACK_URL: !ImportValue sbt-ws-callback-url-dev
       Code:
         ZipFile: |
           def lambda_handler(event, context):
