@@ -27,18 +27,15 @@ def model_fn(model_dir):
 
 
 def input_fn(request_body, request_content_type):
-    """
-    Called every time a frame comes in for processing.
-    Converts the raw request data into a PIL Image that YOLOv8 can read.
-    """
     logger.info(f"Received request with content type: {request_content_type}")
-
     if request_content_type == "application/json":
         body = json.loads(request_body)
         image_data = base64.b64decode(body["image"])
         image = Image.open(BytesIO(image_data)).convert("RGB")
         return image
-
+    if request_content_type in ("application/octet-stream", "image/jpeg", "image/png"):
+        image = Image.open(BytesIO(request_body)).convert("RGB")
+        return image
     raise ValueError(f"Unsupported content type: {request_content_type}")
 
 
