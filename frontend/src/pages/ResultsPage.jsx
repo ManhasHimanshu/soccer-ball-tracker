@@ -140,7 +140,7 @@ function ResultsPage() {
         </h1>
         <p className="text-gray-500 text-sm font-mono mb-6">{videoId}</p>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <div className="text-center p-4 bg-gray-50 rounded-lg">
             <div className="text-2xl font-bold text-gray-800">
               {results.frameCount}
@@ -158,6 +158,12 @@ function ResultsPage() {
               {detectionRate}%
             </div>
             <div className="text-xs text-gray-500 mt-1">Detection rate</div>
+          </div>
+          <div className="text-center p-4 bg-orange-50 rounded-lg">
+            <div className="text-2xl font-bold text-orange-600">
+              {results.speed ? `${results.speed.peakSpeedKmh}` : '—'}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">Peak km/h</div>
           </div>
         </div>
       </div>

@@ -16,9 +16,11 @@ def lambda_handler(event, context):
     )
 
     items = response.get('Items', [])
-
-    # Filter out the STATUS item in Python after the query
-    frame_items = [item for item in items if item['frameId'] != 'STATUS']
+    # Pull out the SPEED item (written by the compute-distance step) before filtering
+    speed_item = next((i for i in items if i['frameId'] == 'SPEED'), None)
+    speed = json.loads(speed_item['result']) if speed_item else None
+    # Keep only real frame rows (drop STATUS and SPEED)
+    frame_items = [item for item in items if item['frameId'] not in ('STATUS', 'SPEED')]
 
     if not frame_items:
         return {
@@ -43,6 +45,7 @@ def lambda_handler(event, context):
         'body': json.dumps({
             'videoId':    video_id,
             'frameCount': len(frames),
-            'frames':     frames
+            'frames':     frames,
+            'speed':      speed
         })
     }

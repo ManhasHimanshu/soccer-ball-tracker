@@ -29,6 +29,9 @@ def broadcast(payload):
 
 TABLE_NAME = os.environ['TRACKING_TABLE']
 FRAMES_PREFIX = 'frames'
+# Frame extraction rate. MUST match the fps the compute-distance Lambda uses to
+# turn frame-gaps into seconds (it defaults to 30.0), or every speed will be wrong.
+EXTRACT_FPS = 60
 
 def set_status(table, video_id, state, error=None):
     item = {
@@ -56,12 +59,12 @@ def lambda_handler(event, context):
     local_video = f'/tmp/{video_id}.mp4'
     s3.download_file(bucket, key, local_video)
 
-    # Extract frames with ffmpeg (1 frame per second)
+    # Extract frames densely enough to capture a fast kick (see EXTRACT_FPS)
     frames_dir = f'/tmp/{video_id}_frames'
     os.makedirs(frames_dir, exist_ok=True)
     subprocess.run([
         'ffmpeg', '-i', local_video,
-        '-vf', 'fps=1',
+        '-vf', f'fps={EXTRACT_FPS}',
         f'{frames_dir}/frame_%04d.jpg',
         '-y'
     ], check=True)
@@ -77,5 +80,6 @@ def lambda_handler(event, context):
     return {
         'videoId': video_id,
         'bucket': bucket,
-        'frameKeys': frame_keys
+        'frameKeys': frame_keys,
+        'fps': EXTRACT_FPS
     }

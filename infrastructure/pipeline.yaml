@@ -1,5 +1,5 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Soccer Ball Tracker - Pipeline Stack (Step Functions + Lambda)'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Soccer Ball Tracker - Pipeline Stack (Step Functions + Lambda)"
 
 Parameters:
   Environment:
@@ -18,16 +18,15 @@ Parameters:
     Description: Name of the WebSocket connections table (from the websocket stack)
 
 Resources:
-
   # ─────────────────────────────────────────
   # IAM Role for Lambda Functions
   # ─────────────────────────────────────────
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'sbt-lambda-role-${Environment}'
+      RoleName: !Sub "sbt-lambda-role-${Environment}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -38,7 +37,7 @@ Resources:
       Policies:
         - PolicyName: SBTLambdaPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               # Allow Lambda to read/write S3
               - Effect: Allow
@@ -48,8 +47,8 @@ Resources:
                   - s3:DeleteObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub 'arn:aws:s3:::sbt-videos-${Environment}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::sbt-videos-${Environment}-${AWS::AccountId}/*'
+                  - !Sub "arn:aws:s3:::sbt-videos-${Environment}-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::sbt-videos-${Environment}-${AWS::AccountId}/*"
               # Allow Lambda to read/write DynamoDB
               - Effect: Allow
                 Action:
@@ -59,26 +58,26 @@ Resources:
                   - dynamodb:BatchWriteItem
                   - dynamodb:Query
                 Resource:
-                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sbt-tracking-${Environment}'
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sbt-tracking-${Environment}"
               # Allow Lambda to call SageMaker endpoint
               - Effect: Allow
                 Action:
                   - sagemaker:InvokeEndpoint
-                Resource: '*'
+                Resource: "*"
         - PolicyName: ws-broadcast
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               # Allow pipeline Lambdas to push messages to WebSocket connections
               - Effect: Allow
                 Action:
                   - execute-api:ManageConnections
-                Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*/POST/@connections/*'
+                Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*/POST/@connections/*"
               # Allow pipeline Lambdas to read the connections table (who is listening)
               - Effect: Allow
                 Action:
                   - dynamodb:Scan
-                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${WsConnectionsTable}'
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${WsConnectionsTable}"
 
   # ─────────────────────────────────────────
   # IAM Role for Step Functions
@@ -86,9 +85,9 @@ Resources:
   StepFunctionsExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'sbt-sfn-role-${Environment}'
+      RoleName: !Sub "sbt-sfn-role-${Environment}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -97,7 +96,7 @@ Resources:
       Policies:
         - PolicyName: SBTStepFunctionsPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               # Allow Step Functions to invoke Lambda functions
               - Effect: Allow
@@ -107,6 +106,7 @@ Resources:
                   - !GetAtt ExtractFramesFunction.Arn
                   - !GetAtt RunInferenceFunction.Arn
                   - !GetAtt StoreResultsFunction.Arn
+                  - !GetAtt ComputeDistanceFunction.Arn
 
   # ─────────────────────────────────────────
   # Lambda Functions
@@ -114,15 +114,17 @@ Resources:
   ExtractFramesFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'sbt-extract-frames-${Environment}'
+      FunctionName: !Sub "sbt-extract-frames-${Environment}"
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
       MemorySize: 1024
+      Layers:
+        - arn:aws:lambda:us-east-1:533003975029:layer:sbt-ffmpeg:1
       Environment:
         Variables:
-          TRACKING_TABLE: !Sub 'sbt-tracking-${Environment}'
+          TRACKING_TABLE: !Sub "sbt-tracking-${Environment}"
           WS_CONNECTIONS_TABLE: !Ref WsConnectionsTable
           WS_CALLBACK_URL: !ImportValue sbt-ws-callback-url-dev
       Code:
@@ -133,7 +135,7 @@ Resources:
   RunInferenceFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'sbt-run-inference-${Environment}'
+      FunctionName: !Sub "sbt-run-inference-${Environment}"
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -142,7 +144,7 @@ Resources:
       Environment:
         Variables:
           SAGEMAKER_ENDPOINT: !Ref SageMakerEndpoint
-          TRACKING_TABLE: !Sub 'sbt-tracking-${Environment}'
+          TRACKING_TABLE: !Sub "sbt-tracking-${Environment}"
           WS_CONNECTIONS_TABLE: !Ref WsConnectionsTable
           WS_CALLBACK_URL: !ImportValue sbt-ws-callback-url-dev
       Code:
@@ -153,7 +155,7 @@ Resources:
   StoreResultsFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'sbt-store-results-${Environment}'
+      FunctionName: !Sub "sbt-store-results-${Environment}"
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -161,9 +163,26 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
-          TRACKING_TABLE: !Sub 'sbt-tracking-${Environment}'
+          TRACKING_TABLE: !Sub "sbt-tracking-${Environment}"
           WS_CONNECTIONS_TABLE: !Ref WsConnectionsTable
           WS_CALLBACK_URL: !ImportValue sbt-ws-callback-url-dev
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"status": "placeholder"}
+
+  ComputeDistanceFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "sbt-compute-distance-${Environment}"
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 120
+      MemorySize: 512
+      Environment:
+        Variables:
+          TRACKING_TABLE: !Sub "sbt-tracking-${Environment}"
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -175,7 +194,7 @@ Resources:
   TrackingPipeline:
     Type: AWS::StepFunctions::StateMachine
     Properties:
-      StateMachineName: !Sub 'sbt-tracking-pipeline-${Environment}'
+      StateMachineName: !Sub "sbt-tracking-pipeline-${Environment}"
       RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
       Definition:
         Comment: Soccer Ball Tracker - Video Processing Pipeline
@@ -186,36 +205,48 @@ Resources:
             Resource: !GetAtt ExtractFramesFunction.Arn
             Next: RunInference
             Retry:
-              - ErrorEquals: ['States.ALL']
+              - ErrorEquals: ["States.ALL"]
                 IntervalSeconds: 5
                 MaxAttempts: 2
                 BackoffRate: 2
             Catch:
-              - ErrorEquals: ['States.ALL']
+              - ErrorEquals: ["States.ALL"]
                 Next: PipelineFailed
           RunInference:
             Type: Task
             Resource: !GetAtt RunInferenceFunction.Arn
             Next: StoreResults
             Retry:
-              - ErrorEquals: ['States.ALL']
+              - ErrorEquals: ["States.ALL"]
                 IntervalSeconds: 10
                 MaxAttempts: 2
                 BackoffRate: 2
             Catch:
-              - ErrorEquals: ['States.ALL']
+              - ErrorEquals: ["States.ALL"]
                 Next: PipelineFailed
           StoreResults:
             Type: Task
             Resource: !GetAtt StoreResultsFunction.Arn
-            Next: PipelineSucceeded
+            Next: ComputeDistance
             Retry:
-              - ErrorEquals: ['States.ALL']
+              - ErrorEquals: ["States.ALL"]
                 IntervalSeconds: 5
                 MaxAttempts: 2
                 BackoffRate: 2
             Catch:
-              - ErrorEquals: ['States.ALL']
+              - ErrorEquals: ["States.ALL"]
+                Next: PipelineFailed
+          ComputeDistance:
+            Type: Task
+            Resource: !GetAtt ComputeDistanceFunction.Arn
+            Next: PipelineSucceeded
+            Retry:
+              - ErrorEquals: ["States.ALL"]
+                IntervalSeconds: 5
+                MaxAttempts: 2
+                BackoffRate: 2
+            Catch:
+              - ErrorEquals: ["States.ALL"]
                 Next: PipelineFailed
           PipelineSucceeded:
             Type: Succeed
@@ -229,7 +260,7 @@ Outputs:
     Description: ARN of the Step Functions state machine
     Value: !Ref TrackingPipeline
     Export:
-      Name: !Sub 'sbt-pipeline-arn-${Environment}'
+      Name: !Sub "sbt-pipeline-arn-${Environment}"
 
   ExtractFramesFunctionArn:
     Description: ARN of the Extract Frames Lambda

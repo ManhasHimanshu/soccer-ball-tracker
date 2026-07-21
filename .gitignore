@@ -40,3 +40,12 @@ tmp/
 *.zip
 response.jsonoutput.txt
 response.json
+
+
+# Deploy + scratch artifacts
+*.zip
+getres.json
+getres_out.json
+payload.json
+response.json
+delkey.json
