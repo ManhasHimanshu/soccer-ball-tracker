@@ -47,31 +47,30 @@ def lambda_handler(event, context):
     video_id   = event['videoId']
     bucket     = event['bucket']
     frame_keys = event['frameKeys']
-
     table = dynamodb.Table(TABLE_NAME)
-    set_status(table, video_id, 'RUNNING_INFERENCE')
-
-    detections = []
-    for key in frame_keys:
-        # Download frame
-        response = s3.get_object(Bucket=bucket, Key=key)
-        frame_bytes = response['Body'].read()
-
-        # Send to SageMaker
-        sm_response = sagemaker_runtime.invoke_endpoint(
-            EndpointName=ENDPOINT_NAME,
-            ContentType='application/octet-stream',
-            Body=frame_bytes
-        )
-        result = json.loads(sm_response['Body'].read())
-
-        detections.append({
-            'frameKey': key,
-            'detections': result
-        })
-
-    return {
-        'videoId': video_id,
-        'bucket': bucket,
-        'detections': detections
-    }
+    try:
+        set_status(table, video_id, 'RUNNING_INFERENCE')
+        detections = []
+        for key in frame_keys:
+            # Download frame
+            response = s3.get_object(Bucket=bucket, Key=key)
+            frame_bytes = response['Body'].read()
+            # Send to SageMaker
+            sm_response = sagemaker_runtime.invoke_endpoint(
+                EndpointName=ENDPOINT_NAME,
+                ContentType='application/octet-stream',
+                Body=frame_bytes
+            )
+            result = json.loads(sm_response['Body'].read())
+            detections.append({
+                'frameKey': key,
+                'detections': result
+            })
+        return {
+            'videoId': video_id,
+            'bucket': bucket,
+            'detections': detections
+        }
+    except Exception as e:
+        set_status(table, video_id, 'FAILED', error=str(e))
+        raise

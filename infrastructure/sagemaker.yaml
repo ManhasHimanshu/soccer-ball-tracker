@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  SBT SageMaker durable base — YOLOv8 model + endpoint config.
+  This is the DECLARATIVE, always-safe layer: both resources are free and
+  survive teardown. The live endpoint is deliberately NOT in this template —
+  it stays a CLI toggle (create-endpoint / delete-endpoint) so the one
+  billable resource can be relit or torn down without causing stack drift.
+  Relight command is emitted as a stack output below.
+
+Parameters:
+  ModelName:
+    Type: String
+    Default: sbt-yolov8-model
+  EndpointConfigName:
+    Type: String
+    Default: sbt-yolov8-config
+  ContainerImage:
+    Type: String
+    Default: 533003975029.dkr.ecr.us-east-1.amazonaws.com/sbt-yolov8:sagemaker
+    Description: Own ECR image (tag 'sagemaker'). Durable dependency — not created here.
+  ModelDataUrl:
+    Type: String
+    Default: s3://sbt-videos-dev-533003975029/model/model.tar.gz
+    Description: YOLOv8 weights tarball in S3. Durable dependency — not created here.
+  ExecutionRoleArn:
+    Type: String
+    Default: arn:aws:iam::533003975029:role/sbt-sagemaker-role-dev
+  InstanceType:
+    Type: String
+    Default: ml.m5.large
+
+Resources:
+  Model:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Ref ModelName
+      ExecutionRoleArn: !Ref ExecutionRoleArn
+      PrimaryContainer:
+        Image: !Ref ContainerImage
+        Mode: SingleModel
+        ModelDataUrl: !Ref ModelDataUrl
+
+  EndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    DependsOn: Model
+    Properties:
+      EndpointConfigName: !Ref EndpointConfigName
+      ProductionVariants:
+        - VariantName: primary
+          ModelName: !Ref ModelName
+          InitialInstanceCount: 1
+          InstanceType: !Ref InstanceType
+          InitialVariantWeight: 1.0
+
+Outputs:
+  ModelName:
+    Description: Durable model name (input to the endpoint config).
+    Value: !Ref ModelName
+  EndpointConfigName:
+    Description: Durable endpoint-config name (input to relight).
+    Value: !Ref EndpointConfigName
+  RelightCommand:
+    Description: One command to bring the billable endpoint online from this base.
+    Value: !Sub >-
+      aws sagemaker create-endpoint
+      --endpoint-name sbt-yolov8-endpoint
+      --endpoint-config-name ${EndpointConfigName}
+      --region ${AWS::Region}
+  TeardownCommand:
+    Description: One command to delete the billable endpoint (keeps model + config).
+    Value: >-
+      aws sagemaker delete-endpoint
+      --endpoint-name sbt-yolov8-endpoint --region us-east-1
