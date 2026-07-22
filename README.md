@@ -4,7 +4,13 @@ Upload a soccer video, get the ball's peak speed in km/h — computed by a
 YOLOv8 detector running on a serverless AWS pipeline, with live progress
 streamed to the browser over WebSockets.
 
-> **Demo:** <!-- TODO: drop the recording here -->
+> **Demo:** 
+
+https://github.com/user-attachments/assets/c9f128f3-8591-4e10-a8bf-2cdadb8224d5
+
+
+
+
 
 ---
 
