@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Description: Cognito Authentication for Soccer Ball Tracker
 
 Parameters:
@@ -14,7 +14,6 @@ Parameters:
     Description: Google OAuth Client Secret
 
 Resources:
-
   # ─── Cognito User Pool ────────────────────────────────────────────────────────
 
   SbtUserPool:
@@ -82,8 +81,10 @@ Resources:
         - Google
       CallbackURLs:
         - http://localhost:3000/callback
+        - https://main.d1kkw3n2k78bb6.amplifyapp.com/callback
       LogoutURLs:
         - http://localhost:3000
+        - https://main.d1kkw3n2k78bb6.amplifyapp.com
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
