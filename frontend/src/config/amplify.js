@@ -7,8 +7,8 @@ export const amplifyConfig = {
         oauth: {
           domain: 'sbt-auth-dev.auth.us-east-1.amazoncognito.com',
           scopes: ['email', 'openid', 'profile'],
-          redirectSignIn: ['http://localhost:3000/callback'],
-          redirectSignOut: ['http://localhost:3000'],
+          redirectSignIn: [`${window.location.origin}/callback`],
+          redirectSignOut: [window.location.origin],
           responseType: 'code'
         }
       }
